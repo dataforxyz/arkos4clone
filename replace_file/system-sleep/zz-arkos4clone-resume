@@ -1,0 +1,107 @@
+#!/bin/bash
+# arkos4clone: re-apply the joystick LED and re-assert the panel backlight
+# after resume from suspend.
+#
+# Why this exists
+# ---------------
+# The analogue-stick RGB LED on the R36 Ultra (and similar MCU/sysfs LED
+# units) is programmed ONCE by EmulationStation, from the JoyLedColor value
+# in es_settings.cfg. After a suspend/resume the LED controller reverts to
+# its power-on default (LEDs ON) and nothing re-applies the user's choice --
+# UNLESS EmulationStation is in the foreground to handle its own wake event.
+# Sleep/wake while inside a game and ES never runs, so the stick LEDs come
+# back on and any chosen colour is lost ("the colour doesn't stick"). The
+# centre power LED survives only because batt_led.service is restarted by the
+# base system-sleep hook; the joystick LED had no equivalent re-apply. This
+# hook closes that gap at the system level, so it also works in-game.
+#
+# It additionally re-asserts the panel backlight on resume to mitigate the
+# intermittent "black screen but audio still plays" wake failure, where the
+# PWM/panel has not finished re-initialising when the base hook restores
+# brightness.
+#
+# Runs as root from /usr/lib/systemd/system-sleep/. Named "zz-" so it runs
+# after the base "sleep" hook (which restores saved brightness) on resume.
+# All device nodes are existence-checked, so this is a safe no-op on hardware
+# without these LEDs / backlight paths.
+
+ES_CFG="/home/ark/.emulationstation/es_settings.cfg"
+
+# Echo the value="..." contents for an es_settings.cfg setting, or nothing.
+cfg_val() {
+	[ -f "$ES_CFG" ] || return 0
+	sed -n "s/.*name=\"$1\"[^>]*value=\"\([^\"]*\)\".*/\1/p" "$ES_CFG" | head -n1
+}
+
+reapply_joyled() {
+	local color ver mode c
+	color="$(cfg_val JoyLedColor)"
+	ver="$(cfg_val R36UltraLedVersion)"
+	[ -z "$color" ] && color="off"
+
+	# 1) The kernel "mode" node understands the full vocabulary ES writes
+	#    (off, white, green_blue, breathing_green_blue, ...). This is the
+	#    same node ES pokes, so it faithfully restores patterns too.
+	if [ -w /sys/class/leds/joyled/mode ]; then
+		echo "$color" > /sys/class/leds/joyled/mode 2>/dev/null || true
+	fi
+
+	# 2) R36 Ultra V2 drives the stick LED over the MCU UART via mcu_led,
+	#    which only understands solid colours. Map the common solid values.
+	if [ "$ver" = "2" ] && [ -x /usr/bin/mcu_led ]; then
+		case "$color" in
+			off|"") mode="OFF" ;;
+			white)  mode="White" ;;
+			orange) mode="Orange" ;;
+			purple) mode="Purple" ;;
+			cyan)   mode="Cyan" ;;
+			red)    mode="Red" ;;
+			green)  mode="Green" ;;
+			blue)   mode="Blue" ;;
+			*)      mode="" ;;  # patterns: handled by the mode node above
+		esac
+		[ -n "$mode" ] && /usr/bin/mcu_led "$mode" 2>/dev/null || true
+	fi
+
+	# 3) When the user wants them OFF, force the raw RGB channels off too,
+	#    covering units wired through the joy-{red,green,blue} sysfs LEDs.
+	if [ "$color" = "off" ]; then
+		for c in red green blue left right; do
+			if [ -w "/sys/class/leds/joy-$c/brightness" ]; then
+				echo 0 > "/sys/class/leds/joy-$c/brightness" 2>/dev/null || true
+			fi
+		done
+	fi
+}
+
+reassert_backlight() {
+	local bl want max cur
+	# Base hook uses the platform path; fall back to the generic class dir.
+	bl="/sys/devices/platform/backlight/backlight/backlight"
+	[ -d "$bl" ] || bl="$(ls -d /sys/class/backlight/* 2>/dev/null | head -n1)"
+	[ -d "$bl" ] || return 0
+
+	# Power the backlight back on (0 = unblank for the backlight class).
+	[ -w "$bl/bl_power" ] && { echo 0 > "$bl/bl_power" 2>/dev/null || true; }
+
+	# Choose a brightness: the saved value, else the current, else max.
+	# This only forces a change when the panel came back dark (saved/current
+	# is 0 or empty); a healthy wake keeps whatever the base hook restored.
+	want="$(cat /var/local/cur_bright.state 2>/dev/null)"
+	max="$(cat "$bl/max_brightness" 2>/dev/null)"
+	cur="$(cat "$bl/brightness" 2>/dev/null)"
+	case "$want" in ''|0) want="" ;; esac
+	if [ -z "$want" ]; then
+		case "$cur" in ''|0) want="${max:-100}" ;; *) want="$cur" ;; esac
+	fi
+	[ -w "$bl/brightness" ] && { echo "$want" > "$bl/brightness" 2>/dev/null || true; }
+}
+
+case "$1" in
+	post)
+		reapply_joyled
+		reassert_backlight
+		;;
+esac
+
+exit 0

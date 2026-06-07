@@ -55,6 +55,13 @@ sudo chown -R 1002:1002 "$MOUNT_DIR/root/usr/local/bin/sdljoymap" || true
 sudo chown -R 1002:1002 "$MOUNT_DIR/root/usr/local/bin/console_detect" || true
 sudo chmod -R 777 "$MOUNT_DIR/root/usr/bin/mcu_led" "$MOUNT_DIR/root/usr/bin/ws2812" "$MOUNT_DIR/root/usr/local/bin/sdljoytest" "$MOUNT_DIR/root/usr/local/bin/sdljoymap" "$MOUNT_DIR/root/usr/local/bin/console_detect"
 
+echo "== 注入 resume 钩子（唤醒后复位摇杆灯/背光） =="
+# system-sleep 钩子：唤醒后按 es_settings.cfg 重新应用摇杆灯，并复位背光
+sudo mkdir -p "$MOUNT_DIR/root/usr/lib/systemd/system-sleep"
+sudo cp -f ./replace_file/system-sleep/zz-arkos4clone-resume "$MOUNT_DIR/root/usr/lib/systemd/system-sleep/"
+sudo chown 0:0 "$MOUNT_DIR/root/usr/lib/systemd/system-sleep/zz-arkos4clone-resume" 2>/dev/null || true
+sudo chmod 755 "$MOUNT_DIR/root/usr/lib/systemd/system-sleep/zz-arkos4clone-resume"
+
 echo "== 替换 modules (root) =="
 SRC="./replace_file/modules"
 DST="$MOUNT_DIR/root/usr/lib/modules"
