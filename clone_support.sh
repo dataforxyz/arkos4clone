@@ -62,6 +62,14 @@ sudo cp -f ./replace_file/system-sleep/zz-arkos4clone-resume "$MOUNT_DIR/root/us
 sudo chown 0:0 "$MOUNT_DIR/root/usr/lib/systemd/system-sleep/zz-arkos4clone-resume" 2>/dev/null || true
 sudo chmod 755 "$MOUNT_DIR/root/usr/lib/systemd/system-sleep/zz-arkos4clone-resume"
 
+echo "== 注入 backlight 复位（游戏切换重新点亮屏幕） =="
+# perfmax/perfnorm 已含 hook，调用 arkos4clone-bl-kick 在 modeset 后重新点亮背光
+for f in arkos4clone-bl-kick perfmax perfnorm; do
+  sudo cp -f "./replace_file/backlight/$f" "$MOUNT_DIR/root/usr/local/bin/$f"
+  sudo chown 0:0 "$MOUNT_DIR/root/usr/local/bin/$f" 2>/dev/null || true
+  sudo chmod 755 "$MOUNT_DIR/root/usr/local/bin/$f"
+done
+
 echo "== 替换 modules (root) =="
 SRC="./replace_file/modules"
 DST="$MOUNT_DIR/root/usr/lib/modules"

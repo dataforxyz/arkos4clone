@@ -104,6 +104,12 @@ echo "== 注入 resume 钩子（唤醒后复位摇杆灯/背光） =="
 mkdir -p "$PAYLOAD_ROOT/usr/lib/systemd/system-sleep"
 cp -f ./replace_file/system-sleep/zz-arkos4clone-resume "$PAYLOAD_ROOT/usr/lib/systemd/system-sleep/" 2>/dev/null || true
 
+echo "== 注入 backlight 复位（游戏切换重新点亮屏幕，perfmax/perfnorm 已含 hook） =="
+cp -f ./replace_file/backlight/arkos4clone-bl-kick \
+      ./replace_file/backlight/perfmax \
+      ./replace_file/backlight/perfnorm \
+      "$PAYLOAD_ROOT/usr/local/bin/" 2>/dev/null || true
+
 echo "== 注入 rk915 固件 =="
 mkdir -p "$PAYLOAD_ROOT/usr/lib/firmware/"
 cp -f ./bin/rk915_*.bin "$PAYLOAD_ROOT/usr/lib/firmware/" 2>/dev/null || true
@@ -245,6 +251,11 @@ meta_add "0777" "1002:1002" "/usr/local/bin/console_detect"
 
 # resume 钩子：root 拥有、可执行（system-sleep 钩子必须由 root 执行）
 meta_add "0755" "0:0" "/usr/lib/systemd/system-sleep/zz-arkos4clone-resume"
+
+# backlight 复位：root 拥有、可执行（perfmax/perfnorm 经 sudo 调用）
+meta_add "0755" "0:0" "/usr/local/bin/arkos4clone-bl-kick"
+meta_add "0755" "0:0" "/usr/local/bin/perfmax"
+meta_add "0755" "0:0" "/usr/local/bin/perfnorm"
 
 # rk915 固件 777
 meta_add "0777" "1002:1002" "/usr/lib/firmware/rk915_*.bin"

@@ -1,0 +1,46 @@
+#!/bin/bash
+# arkos4clone: re-light the panel backlight after a DRM modeset.
+#
+# Why this exists
+# ---------------
+# On the R36 Ultra (rk3326 panel) the backlight drops when the display mode
+# switches -- launching a game (EmulationStation -> emulator) and exiting back
+# to the menu (emulator -> ES). Audio keeps playing but the screen stays black
+# until the brightness is poked. The brightness hotkey fixes it because it
+# writes a *different* value; many backlight drivers no-op an unchanged write,
+# so simply re-writing the same number does nothing. This helper forces a real
+# re-apply: it unblanks (bl_power) and nudges brightness to a neighbouring
+# value before settling on the target.
+#
+# Usage: arkos4clone-bl-kick [target_brightness]
+#   target defaults to /var/local/.bl_save (saved by perfmax), then the current
+#   value, then max_brightness.
+
+bl="/sys/devices/platform/backlight/backlight/backlight"
+[ -d "$bl" ] || bl="$(ls -d /sys/class/backlight/* 2>/dev/null | head -n1)"
+[ -d "$bl" ] || exit 0
+
+# Unblank (clears DPMS/bl_power blanking from the modeset).
+[ -w "$bl/bl_power" ] && echo 0 > "$bl/bl_power" 2>/dev/null
+
+max="$(cat "$bl/max_brightness" 2>/dev/null)"
+cur="$(cat "$bl/brightness" 2>/dev/null)"
+want="${1:-}"
+[ -z "$want" ] && want="$(cat /var/local/.bl_save 2>/dev/null)"
+case "$want" in ''|0) want="" ;; esac
+if [ -z "$want" ]; then
+	case "$cur" in ''|0) want="${max:-100}" ;; *) want="$cur" ;; esac
+fi
+
+# Force a PWM re-apply: write a neighbouring value first (drivers commonly
+# short-circuit an unchanged brightness), then the real target.
+if [ -w "$bl/brightness" ] && [ -n "$want" ]; then
+	if [ -n "$max" ] && [ "$want" -lt "$max" ] 2>/dev/null; then
+		echo "$((want + 1))" > "$bl/brightness" 2>/dev/null
+	else
+		echo "$((want > 1 ? want - 1 : 1))" > "$bl/brightness" 2>/dev/null
+	fi
+	echo "$want" > "$bl/brightness" 2>/dev/null
+fi
+
+exit 0
