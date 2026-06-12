@@ -1,0 +1,9 @@
+[Unit]
+Description=arkos4clone: power off after charger-triggered boot (no input within window)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/pwron-autostop.py
+
+[Install]
+WantedBy=multi-user.target

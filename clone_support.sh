@@ -70,6 +70,16 @@ for f in arkos4clone-bl-kick perfmax perfnorm; do
   sudo chmod 755 "$MOUNT_DIR/root/usr/local/bin/$f"
 done
 
+echo "== 注入 pwron-autostop（充电插入触发开机后自动关机） =="
+# PMIC 插入充电器即开机且无法软件禁止；此服务在开机后 5 分钟无按键且
+# 充电器在线时自动关机（关机状态下仍充电），按任意键取消
+sudo cp -f ./replace_file/pwron-autostop/pwron-autostop.py "$MOUNT_DIR/root/usr/local/bin/pwron-autostop.py"
+sudo cp -f ./replace_file/pwron-autostop/pwron-autostop.service "$MOUNT_DIR/root/etc/systemd/system/pwron-autostop.service"
+sudo ln -sf /etc/systemd/system/pwron-autostop.service "$MOUNT_DIR/root/etc/systemd/system/multi-user.target.wants/pwron-autostop.service"
+sudo chown 0:0 "$MOUNT_DIR/root/usr/local/bin/pwron-autostop.py" "$MOUNT_DIR/root/etc/systemd/system/pwron-autostop.service" 2>/dev/null || true
+sudo chmod 755 "$MOUNT_DIR/root/usr/local/bin/pwron-autostop.py"
+sudo chmod 644 "$MOUNT_DIR/root/etc/systemd/system/pwron-autostop.service"
+
 echo "== 替换 modules (root) =="
 SRC="./replace_file/modules"
 DST="$MOUNT_DIR/root/usr/lib/modules"

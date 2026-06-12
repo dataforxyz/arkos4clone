@@ -110,6 +110,10 @@ cp -f ./replace_file/backlight/arkos4clone-bl-kick \
       ./replace_file/backlight/perfnorm \
       "$PAYLOAD_ROOT/usr/local/bin/" 2>/dev/null || true
 
+echo "== 注入 pwron-autostop（充电插入触发开机后自动关机） =="
+cp -f ./replace_file/pwron-autostop/pwron-autostop.py "$PAYLOAD_ROOT/usr/local/bin/" 2>/dev/null || true
+cp -f ./replace_file/pwron-autostop/pwron-autostop.service "$PAYLOAD_ROOT/etc/systemd/system/" 2>/dev/null || true
+
 echo "== 注入 rk915 固件 =="
 mkdir -p "$PAYLOAD_ROOT/usr/lib/firmware/"
 cp -f ./bin/rk915_*.bin "$PAYLOAD_ROOT/usr/lib/firmware/" 2>/dev/null || true
@@ -256,6 +260,10 @@ meta_add "0755" "0:0" "/usr/lib/systemd/system-sleep/zz-arkos4clone-resume"
 meta_add "0755" "0:0" "/usr/local/bin/arkos4clone-bl-kick"
 meta_add "0755" "0:0" "/usr/local/bin/perfmax"
 meta_add "0755" "0:0" "/usr/local/bin/perfnorm"
+
+# pwron-autostop：root 拥有
+meta_add "0755" "0:0" "/usr/local/bin/pwron-autostop.py"
+meta_add "0644" "0:0" "/etc/systemd/system/pwron-autostop.service"
 
 # rk915 固件 777
 meta_add "0777" "1002:1002" "/usr/lib/firmware/rk915_*.bin"
@@ -677,6 +685,7 @@ log "=== Step 10: Enable services ==="
 if have_systemctl; then
   systemctl daemon-reload 2>/dev/null || true
   systemctl enable adckeys.service 2>/dev/null && log "Enabled: adckeys.service" || true
+  systemctl enable pwron-autostop.service 2>/dev/null && log "Enabled: pwron-autostop.service" || true
   systemctl restart adckeys.service 2>/dev/null && log "Started: adckeys.service" || true
   chmod 777 /usr/local/bin/ogage 2>/dev/null && log "Fixed: ogage chmod 777" || true
 fi
